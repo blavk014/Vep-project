@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Chat;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use App\Events\ChatMessageSent;
 
 class ChatController extends Controller
 {
@@ -30,6 +31,8 @@ class ChatController extends Controller
             'user_id' => Auth::id(),
             'message' => $request->message,
         ]);
+        event(new ChatMessageSent($chat));
+
 
         return response()->json(['chat' => $chat]);
     }

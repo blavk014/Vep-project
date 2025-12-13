@@ -38,7 +38,9 @@ use App\Http\Controllers\BoothController;
         Route::post('/polls/{poll}/vote', [PollController::class, 'vote']);
         Route::get('/events/{eventId}/exhibitors', [ExhibitorController::class, 'index']);
         Route::get('/exhibitors/{id}', [ExhibitorController::class, 'show']);
-
+        Route::post('/signal/offer', [StreamController::class, 'sendOffer']);
+        Route::post('/signal/answer', [StreamController::class, 'sendAnswer']);
+        Route::post('/signal/candidate', [StreamController::class, 'sendCandidate']);
 
    
         Route::middleware('role:admin')->group(function () {

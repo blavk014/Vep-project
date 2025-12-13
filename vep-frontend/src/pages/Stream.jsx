@@ -1,5 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import axiosClient from "../utils/axiosClient";
+import Pusher from "pusher-js";
+import Chat from "./Chat";
 
 export default function Streams({ eventId }) {
   const [streams, setStreams] = useState([]);
@@ -9,11 +11,30 @@ export default function Streams({ eventId }) {
   const [end, setEnd] = useState("");
   const [streamUrl, setStreamUrl] = useState("");
 
+  const localVideo = useRef(null);
+  const remoteVideo = useRef(null);
+  const peerRef = useRef(null);
+  const streamRef = useRef(null);
+  const [isSpeaker, setIsSpeaker] = useState(false);
+
   useEffect(() => {
     axiosClient
       .get(`/events/${eventId}/streams`)
       .then((res) => setStreams(res.data))
       .catch((err) => console.log(err));
+
+    const pusher = new Pusher(process.env.REACT_APP_PUSHER_KEY, {
+      cluster: process.env.REACT_APP_PUSHER_CLUSTER,
+      authEndpoint: "http://localhost:8000/api/broadcasting/auth",
+      auth: {
+        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+      },
+    });
+
+    const channel = pusher.subscribe(`presence-stream.${eventId}`);
+    channel.bind("App\\Events\\WebRTCSignal", (signal) =>
+      handleSignal(signal.data)
+    );
   }, [eventId]);
 
   const handleAdd = () => {
@@ -39,9 +60,70 @@ export default function Streams({ eventId }) {
       .catch((err) => console.log(err));
   };
 
+  const initWebRTC = async () => {
+    peerRef.current = new RTCPeerConnection({
+      iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+    });
+
+    peerRef.current.onicecandidate = (e) => {
+      if (e.candidate) sendSignal("candidate", e.candidate);
+    };
+
+    peerRef.current.ontrack = (e) => {
+      remoteVideo.current.srcObject = e.streams[0];
+    };
+
+    if (isSpeaker) {
+      streamRef.current = await navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: true,
+      });
+      localVideo.current.srcObject = streamRef.current;
+      streamRef.current
+        .getTracks()
+        .forEach((track) => peerRef.current.addTrack(track, streamRef.current));
+      createOffer();
+    }
+  };
+
+  const createOffer = async () => {
+    const offer = await peerRef.current.createOffer();
+    await peerRef.current.setLocalDescription(offer);
+    sendSignal("offer", offer);
+  };
+
+  const handleSignal = async (signal) => {
+    if (!peerRef.current) await initWebRTC();
+    const { type, data } = signal;
+
+    if (type === "offer" && !isSpeaker) {
+      await peerRef.current.setRemoteDescription(
+        new RTCSessionDescription(data)
+      );
+      const answer = await peerRef.current.createAnswer();
+      await peerRef.current.setLocalDescription(answer);
+      sendSignal("answer", answer);
+    }
+
+    if (type === "answer" && isSpeaker) {
+      await peerRef.current.setRemoteDescription(
+        new RTCSessionDescription(data)
+      );
+    }
+
+    if (type === "candidate") {
+      await peerRef.current.addIceCandidate(new RTCIceCandidate(data));
+    }
+  };
+
+  const sendSignal = (type, data) => {
+    axiosClient.post(`/stream/${eventId}/signal`, { type, data });
+  };
+
   return (
     <div>
       <h2>Streams</h2>
+
       <input
         placeholder="Title"
         value={title}
@@ -77,6 +159,39 @@ export default function Streams({ eventId }) {
           </li>
         ))}
       </ul>
+
+      {/* --- Live Streaming Video --- */}
+      <div style={{ marginTop: "20px" }}>
+        <label>
+          <input
+            type="checkbox"
+            checked={isSpeaker}
+            onChange={(e) => setIsSpeaker(e.target.checked)}
+          />{" "}
+          I'm the Speaker
+        </label>
+        <div>
+          <video
+            ref={localVideo}
+            autoPlay
+            muted
+            playsInline
+            style={{ width: "300px", marginRight: "10px" }}
+          />
+          <video
+            ref={remoteVideo}
+            autoPlay
+            playsInline
+            style={{ width: "300px" }}
+          />
+          {streams.map((s) => (
+            <div key={s.id}>
+              <h3>{s.title}</h3>
+              <Chat eventId={eventId} streamId={s.id} />
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

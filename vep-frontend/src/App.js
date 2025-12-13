@@ -11,6 +11,8 @@ import EditEvent from "./pages/EditEvent";
 import ExhibitorsList from "./pages/ExhibitorsList";
 import CreateExhibitor from "./pages/CreateExhibitor";
 import EditExhibitor from "./pages/EditExhibitor";
+import SpeakerBroadcast from "./pages/SpeakerBroadcast";
+import ViewerPage from "./pages/ViewerPage";
 
 function App() {
   return (
@@ -106,6 +108,10 @@ function App() {
             </ProtectedRoute>
           }
         />
+        <Routes>
+          <Route path="/speaker/:eventId" element={<SpeakerBroadcast />} />
+          <Route path="/viewer/:eventId" element={<ViewerPage />} />
+        </Routes>
       </Routes>
     </BrowserRouter>
   );

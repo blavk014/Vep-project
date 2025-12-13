@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import axiosClient from "../utils/axiosClient";
+import Pusher from "pusher-js";
 
 export default function Chat({ eventId, streamId }) {
   const [messages, setMessages] = useState([]);
@@ -10,6 +11,27 @@ export default function Chat({ eventId, streamId }) {
       .get(`/events/${eventId}/chats/${streamId}`)
       .then((res) => setMessages(res.data))
       .catch((err) => console.log(err));
+
+    const pusher = new Pusher(process.env.REACT_APP_PUSHER_KEY, {
+      cluster: process.env.REACT_APP_PUSHER_CLUSTER,
+      authEndpoint: "http://localhost:8000/api/broadcasting/auth",
+      auth: {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
+      },
+    });
+
+    const channel = pusher.subscribe(`chat-stream.${streamId}`);
+
+    channel.bind("new-message", (data) => {
+      setMessages((prev) => [...prev, data]);
+    });
+
+    return () => {
+      channel.unsubscribe();
+      pusher.disconnect();
+    };
   }, [eventId, streamId]);
 
   const sendMsg = () => {

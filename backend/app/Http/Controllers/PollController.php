@@ -2,11 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\PollUpdated;
 use App\Models\Poll;
 use App\Models\PollOption;
 use App\Models\PollVote;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use App\Events\PollVoted;
 
 class PollController extends Controller
 {
@@ -15,7 +17,8 @@ class PollController extends Controller
         $query = Poll::where('event_id', $eventId);
         if ($streamId) $query->where('stream_id', $streamId);
 
-        return $query->with('options')->get();
+       return $query->with('options.votes')->get();
+
     }
 
     public function store(Request $request)
@@ -41,25 +44,23 @@ class PollController extends Controller
     }
 
     public function vote(Request $request, $pollId)
-    {
-        $request->validate([
-            'option_id' => 'required|exists:poll_options,id',
-        ]);
+{
+    $request->validate([
+        'option_id' => 'required|exists:poll_options,id',
+    ]);
 
-        $existingVote = PollVote::where('poll_id', $pollId)
-            ->where('user_id', Auth::id())
-            ->first();
+    $vote = PollVote::updateOrCreate(
+        [
+            'poll_id' => $pollId,
+            'user_id' => Auth::id(),
+        ],
+        [
+            'option_id' => $request->option_id,
+        ]
+    );
 
-        if ($existingVote) {
-            $existingVote->update(['option_id' => $request->option_id]);
-        } else {
-            PollVote::create([
-                'poll_id' => $pollId,
-                'option_id' => $request->option_id,
-                'user_id' => Auth::id(),
-            ]);
-        }
+    broadcast(new PollUpdated($pollId))->toOthers();
 
-        return response()->json(['message' => 'Vote recorded']);
-    }
+    return response()->json(['message' => 'Vote recorded']);
+}
 }

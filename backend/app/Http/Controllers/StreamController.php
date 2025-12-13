@@ -4,16 +4,16 @@ namespace App\Http\Controllers;
 
 use App\Models\Stream;
 use Illuminate\Http\Request;
+use App\Events\WebRTCSignal;
+use Illuminate\Support\Facades\Auth;
 
 class StreamController extends Controller
 {
-    
     public function index($eventId)
     {
         return Stream::where('event_id', $eventId)->get();
     }
 
-   
     public function store(Request $request)
     {
         $validated = $request->validate([
@@ -53,5 +53,22 @@ class StreamController extends Controller
         $stream->delete();
 
         return response()->json(['message' => 'Stream deleted successfully']);
+    }
+
+    
+    public function sendSignal(Request $request, $eventId)
+    {
+        $request->validate([
+            'type' => 'required|string',
+            'data' => 'required'
+        ]);
+
+        broadcast(new WebRTCSignal($eventId, [
+            'type' => $request->type,
+            'data' => $request->data,
+            'user_id' => Auth::id(),
+        ]))->toOthers();
+
+        return response()->json(['message' => 'Signal sent']);
     }
 }
