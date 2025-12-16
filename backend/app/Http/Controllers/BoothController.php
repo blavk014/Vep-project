@@ -10,7 +10,7 @@ class BoothController extends Controller
 {
     public function index($exhibitorId)
     {
-        return Booth::where('exhibitor_id', $exhibitorId)->first();
+        return Booth::where('exhibitor_id', $exhibitorId)->firstOrFail();
     }
 
     public function store(Request $request)
